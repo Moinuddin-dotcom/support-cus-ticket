@@ -2,7 +2,7 @@
 set -e
 
 echo "Applying database migrations..."
-npx prisma migrate deploy
+./node_modules/.bin/prisma migrate deploy
 
 if [ "$RUN_SEED" = "true" ]; then
   echo "Seeding demo data..."
