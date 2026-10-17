@@ -5,5 +5,5 @@ import { ROLE_HOME } from '@/lib/types';
 /** Middleware normally redirects "/" first; this is the server-side fallback. */
 export default async function Home() {
   const user = await getCurrentUser();
-  redirect(user ? ROLE_HOME[user.role] : '/login');
+  redirect(user ? ROLE_HOME[user.role] : '/api/auth/session-expired');
 }

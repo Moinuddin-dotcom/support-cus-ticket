@@ -22,7 +22,8 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 /** Server-side layout guard: redirects unless the verified user has `role`. */
 export async function requireRole(role: Role): Promise<SessionUser> {
   const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  // Clear the rejected cookie first, or middleware would redirect /login straight back here.
+  if (!user) redirect('/api/auth/session-expired');
   if (user.role !== role) redirect(ROLE_HOME[user.role]);
   return user;
 }
