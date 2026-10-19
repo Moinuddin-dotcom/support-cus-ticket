@@ -39,7 +39,9 @@ export function Button({
       )}
     >
       {loading && <Spinner className="h-4 w-4" />}
-      {children}
+      {/* Wrapped so React never inserts the spinner next to a bare text node: extensions such as
+          Grammarly or page translators replace those, and React then throws on insertBefore. */}
+      <span>{children}</span>
     </button>
   );
 }
