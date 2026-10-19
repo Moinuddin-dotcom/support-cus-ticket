@@ -84,6 +84,20 @@ The API checks permissions on every request either way.
 
 ## Getting started
 
+### Prerequisites
+
+| Tool | Version | Needed for |
+| --- | --- | --- |
+| Node.js | 20 or newer (22 recommended) | Local development |
+| npm or pnpm | npm 10+ / pnpm 9+ | Installing packages (the repo ships `package-lock.json`, but pnpm works too) |
+| Docker Desktop | Recent, with Compose v2 | Option A, or just Postgres + Redis for Option B |
+| Git | Any | Cloning the repo |
+
+```bash
+git clone <repo-url> support-cus-ticket
+cd support-cus-ticket
+```
+
 ### Option A: Docker (everything in one command)
 
 ```bash
@@ -97,48 +111,80 @@ docker compose up --build
 | Swagger docs | http://localhost:4000/api/docs |
 | Health | http://localhost:4000/api/health |
 
-When the backend container starts, it runs `prisma migrate deploy` and then the seed script. The seed is idempotent, and you can turn it off with `RUN_SEED=false`.
+When the backend container starts, it runs `prisma migrate deploy` and then the seed script. The seed is idempotent, and you can turn it off with `RUN_SEED=false`. Log in with one of the [test credentials](#test-credentials).
 
 To turn on real AI suggestions, set `AI_API_KEY` (and optionally `AI_PROVIDER`/`AI_MODEL`) in your shell or in a root `.env` file before running compose.
 
-If a host port is already taken, override it:
+If a host port is already taken (for example by a Postgres installed directly on Windows/macOS), override it. Compose also reads these from a root `.env` file:
 
 ```bash
-POSTGRES_PORT=5433 REDIS_PORT=6380 BACKEND_PORT=4001 FRONTEND_PORT=3001 docker compose up --build
+POSTGRES_PORT=5435 REDIS_PORT=6380 BACKEND_PORT=4001 FRONTEND_PORT=3001 docker compose up --build
 ```
 
 If you change `BACKEND_PORT` or `FRONTEND_PORT`, also update `FRONTEND_URL` (CORS) in `docker-compose.yml`.
 
-### Option B: Local development
+Stop everything with `docker compose down` (add `-v` to also wipe the database volume).
 
-Requirements: Node 20+ and npm. Run Postgres and Redis however you like; the easiest way is `docker compose up -d postgres redis`.
+### Option B: Local development (hot reload)
+
+**1. Start Postgres and Redis.** The easiest way is Docker:
 
 ```bash
-# Backend
-cd backend
-cp .env.example .env          # adjust DATABASE_URL / REDIS_URL / JWT_SECRET
-npm install
-npx prisma migrate dev        # applies migrations and generates the client
-npm run seed                  # demo users + tickets
-npm run start:dev             # http://localhost:4000/api
+docker compose up -d postgres redis
+```
 
-# Frontend (second terminal)
+If the full stack from Option A is running, stop its app containers first, otherwise ports 3000/4000 are taken: `docker compose stop backend frontend`.
+
+**2. Backend** (first terminal):
+
+```bash
+cd backend
+cp .env.example .env          # then check DATABASE_URL, REDIS_URL and JWT_SECRET
+npm install                   # or: pnpm install
+npx prisma migrate dev        # applies migrations and generates the Prisma client
+npm run seed                  # demo users + tickets (safe to re-run)
+npm run start:dev             # http://localhost:4000/api, Swagger at /api/docs
+```
+
+`DATABASE_URL` and `REDIS_URL` must use the host ports Postgres and Redis are published on. With the compose defaults that is `localhost:5432` and `localhost:6379`. If you set `POSTGRES_PORT=5435` / `REDIS_PORT=6380`, use those ports in `backend/.env` too.
+
+**3. Frontend** (second terminal):
+
+```bash
 cd frontend
-cp .env.example .env.local
-npm install
+cp .env.example .env.local    # NEXT_PUBLIC_API_URL=http://localhost:4000/api
+npm install                   # or: pnpm install
 npm run dev                   # http://localhost:3000
 ```
+
+Open http://localhost:3000 and log in with one of the [test credentials](#test-credentials).
+
+With pnpm, every `npm run <script>` above is `pnpm <script>` (e.g. `pnpm start:dev`, `pnpm seed`), and `npx` is `pnpm exec`.
+
+### Troubleshooting
+
+| Symptom | Cause and fix |
+| --- | --- |
+| `start:dev` prints `Cannot find module '.../dist/main'` | A stale `tsconfig.build.tsbuildinfo` made the compiler skip output after `dist/` was deleted. The build info now lives inside `dist/`; if you still have an old `backend/tsconfig.build.tsbuildinfo`, delete it and rerun. |
+| `Can't reach database server at localhost:XXXX` (P1001) | Postgres isn't running on the port in `DATABASE_URL`. Start it (`docker compose up -d postgres`) or fix the port. |
+| `Authentication failed against database server` (P1000) | Something else (often a locally installed Postgres) answers on that port. Publish the compose Postgres on another port (`POSTGRES_PORT=5435`) and point `DATABASE_URL` at it. |
+| `EADDRINUSE :::4000` / `:::3000` | The Docker `backend`/`frontend` containers already use the port. `docker compose stop backend frontend`, or run with `PORT=4100` and update the frontend's `NEXT_PUBLIC_API_URL`. |
+| Login page says "The API is unreachable" | The frontend can't reach the API. Make sure the backend is running and `NEXT_PUBLIC_API_URL` (or `API_URL`) in `frontend/.env.local` points to it, including `/api`. |
+| Login says "Invalid email or password" | The database hasn't been seeded, or the password is wrong. Run `npm run seed` in `backend/`. |
+| Login succeeds but you're sent straight back to `/login` | In a production build (`npm start` / Docker) the session cookie is `Secure`. Browsers only accept that over HTTPS or on `http://localhost`; open the app at `http://localhost:3000`, not `127.0.0.1` or a LAN IP. |
+| "Too many requests" on login | Login is rate-limited to 10 attempts per minute per IP. Wait a minute. |
 
 ### Useful commands
 
 | Where | Command | What it does |
 | --- | --- | --- |
-| backend | `npm test` | Unit tests |
+| backend | `npm test` | Unit tests (no DB or Redis needed) |
 | backend | `npx jest src/tickets/ticket-status.service.spec.ts` | Run a single test file |
 | backend | `npx jest -t "skip"` | Run tests whose name matches a pattern |
 | backend | `npm run lint` / `npm run typecheck` / `npm run format:check` | Static checks |
 | backend | `npm run build` | Compile to `dist/` |
 | backend | `npx prisma migrate dev --name <change>` | Create a new migration after editing `schema.prisma` |
+| backend | `npx prisma studio` | Browse the database in a web UI |
 | backend | `npm run eval` | AI classification accuracy report |
 | frontend | `npm run lint` / `npm run typecheck` / `npm run build` | Static checks and production build |
 
@@ -399,6 +445,8 @@ These are created by the seed (`backend/src/seed/seed.ts`):
 | Customer | `customer1@example.com` | `Customer123!` |
 | Customer | `customer2@example.com` | `Customer123!` |
 | Customer | `customer3@example.com` | `Customer123!` |
+
+The login page has **Admin**, **Agent** and **Customer** buttons that fill in these credentials (`admin@example.com`, `agent1@example.com`, `customer1@example.com`). Hide them with `NEXT_PUBLIC_DEMO_LOGIN=false` in the frontend environment; the value is read at build time.
 
 The seed also creates 10 tickets across every status, priority and category. Two of them are already overdue, one is unassigned, and some have comment threads.
 

@@ -11,6 +11,14 @@ type Mode = 'login' | 'register';
 type Values = { name: string; email: string; password: string };
 type Errors = Partial<Record<keyof Values, string>>;
 
+/** Seeded accounts (backend/src/seed/seed.ts). Set NEXT_PUBLIC_DEMO_LOGIN=false to hide the buttons. */
+const DEMO_ACCOUNTS: { label: string; email: string; password: string }[] = [
+  { label: 'Admin', email: 'admin@example.com', password: 'Admin123!' },
+  { label: 'Agent', email: 'agent1@example.com', password: 'Agent123!' },
+  { label: 'Customer', email: 'customer1@example.com', password: 'Customer123!' },
+];
+const SHOW_DEMO_LOGIN = process.env.NEXT_PUBLIC_DEMO_LOGIN !== 'false';
+
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD = /^(?=.*[A-Za-z])(?=.*\d).{8,72}$/;
 
@@ -42,6 +50,12 @@ export function AuthForm({ mode }: { mode: Mode }) {
   function set(key: keyof Values, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
+  }
+
+  function fillDemo(email: string, password: string) {
+    setValues((prev) => ({ ...prev, email, password }));
+    setErrors({});
+    setFormError(null);
   }
 
   async function submit(event: FormEvent) {
@@ -78,6 +92,25 @@ export function AuthForm({ mode }: { mode: Mode }) {
           </p>
         </div>
         <Card className="p-6">
+          {isLogin && SHOW_DEMO_LOGIN && (
+            <div className="mb-5 border-b border-slate-100 pb-5">
+              <p className="mb-2 text-xs font-medium text-slate-500">Demo accounts: click to fill in the form</p>
+              <div className="grid grid-cols-3 gap-2">
+                {DEMO_ACCOUNTS.map((account) => (
+                  <Button
+                    key={account.label}
+                    type="button"
+                    variant="secondary"
+                    className="px-2"
+                    disabled={submitting}
+                    onClick={() => fillDemo(account.email, account.password)}
+                  >
+                    {account.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           <form onSubmit={submit} className="space-y-4" noValidate>
             {!isLogin && (
               <Field label="Name" htmlFor="name" error={errors.name}>
