@@ -4,11 +4,11 @@
   "private": true,
   "description": "Support Ticket System API (NestJS + Prisma + BullMQ)",
   "scripts": {
-    "build": "nest build",
-    "start": "node dist/main",
-    "start:dev": "nest start --watch",
-    "start:prod": "prisma migrate deploy && node dist/main",
-    "lint": "eslint \"{src,eval}/**/*.ts\"",
+    "build": "node init && nest build",
+    "start": "node init && node dist/main",
+    "start:dev": "node init && nest start --watch",
+    "start:prod": "node init && prisma migrate deploy && node dist/main",
+    "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -17,9 +17,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "seed": "ts-node src/seed/seed.ts",
-    "eval": "ts-node eval/run-eval.ts",
-    "format": "prettier --write \"{src,eval}/**/*.ts\"",
-    "format:check": "prettier --check \"{src,eval}/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\""
   },
   "prisma": {
     "seed": "ts-node src/seed/seed.ts"
@@ -28,7 +27,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.135.0",
     "@nestjs/bullmq": "^11.0.5",
     "@nestjs/common": "^11.2.7",
     "@nestjs/config": "^4.0.4",
