@@ -58,13 +58,6 @@ export interface Paginated<T> {
   meta: { page: number; pageSize: number; total: number; totalPages: number };
 }
 
-export interface AiSuggestion {
-  category: Category;
-  priority: Priority;
-  summary: string;
-  source: 'ai' | 'fallback';
-}
-
 export interface AgentWorkload {
   agentId: string;
   name: string;

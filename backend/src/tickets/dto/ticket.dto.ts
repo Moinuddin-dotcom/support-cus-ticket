@@ -29,7 +29,7 @@ export class CreateTicketDto {
   @IsIn(TICKET_CATEGORIES)
   category: TicketCategory;
 
-  @ApiPropertyOptional({ description: 'Short summary (e.g. the edited AI suggestion)' })
+  @ApiPropertyOptional({ description: 'Optional 1-2 line summary for the agent' })
   @IsOptional()
   @Transform(trim)
   @IsString()

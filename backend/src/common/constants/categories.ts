@@ -7,5 +7,3 @@ export const TICKET_CATEGORIES = [
 ] as const;
 
 export type TicketCategory = (typeof TICKET_CATEGORIES)[number];
-
-export const DEFAULT_CATEGORY: TicketCategory = 'General';

@@ -2,7 +2,7 @@
 
 Customers open support tickets, agents work on them, and admins manage everything.
 
-- **Customers** create tickets (with optional AI help), see only their own tickets, and comment on them.
+- **Customers** create tickets, see only their own tickets, and comment on them.
 - **Agents** see the tickets assigned to them, move them through the status flow, and reply.
 - **Admins** see every ticket, assign and reassign tickets, manage users, and view reports.
 
@@ -20,12 +20,11 @@ Two background jobs run on BullMQ: one auto-assigns new tickets to the least-bus
 6. [API summary](#api-summary)
 7. [Business rules](#business-rules)
 8. [Security](#security)
-9. [AI feature and evaluation](#ai-feature-and-evaluation)
-10. [Tests](#tests)
-11. [Deployment](#deployment)
-12. [Test credentials](#test-credentials)
-13. [Assumptions and decisions](#assumptions-and-decisions)
-14. [Future improvements](#future-improvements)
+9. [Tests](#tests)
+10. [Deployment](#deployment)
+11. [Test credentials](#test-credentials)
+12. [Assumptions and decisions](#assumptions-and-decisions)
+13. [Future improvements](#future-improvements)
 
 ---
 
@@ -39,7 +38,6 @@ flowchart LR
   API -->|"enqueue jobs"| Redis[("Redis<br/>BullMQ")]
   Worker["BullMQ worker<br/>(same NestJS process)"] --> Redis
   Worker --> PG
-  API -->|"POST /ai/suggest<br/>timeout + fallback"| LLM["LLM provider<br/>(Anthropic / OpenAI)"]
 ```
 
 ASCII version:
@@ -50,10 +48,9 @@ ASCII version:
                        /api/proxy/*                   ▼   │
                                                      Redis ◀── BullMQ worker
                                                       (auto-assign, SLA sweep)
-                                       NestJS API ──▶ LLM (AI suggestions)
 ```
 
-**Backend modules** (`backend/src`): `auth`, `users`, `tickets`, `comments`, `queue`, `ai`, `reports`, plus `health`, `prisma` and `common` (guards, decorators, the exception filter, DTO helpers).
+**Backend modules** (`backend/src`): `auth`, `users`, `tickets`, `comments`, `queue`, `reports`, plus `health`, `prisma` and `common` (guards, decorators, the exception filter, DTO helpers).
 
 **Frontend**: Next.js App Router pages under `frontend/src/app/{customer,agent,admin}`. The browser never calls the API directly. Instead:
 
@@ -76,8 +73,7 @@ The API checks permissions on every request either way.
 | Database | PostgreSQL 16 + Prisma 6 |
 | Queue | BullMQ 5 + Redis 7 |
 | Auth | JWT (passport-jwt), bcrypt (`bcryptjs`), role guard |
-| Validation | class-validator + global `ValidationPipe`; zod for env and AI output |
-| AI | Anthropic Messages API (structured output) or OpenAI (JSON schema), configurable |
+| Validation | class-validator + global `ValidationPipe`; zod for env |
 | Tests | Jest + ts-jest |
 | Containers | Docker (multi-stage) + docker-compose |
 | Hosting | Vercel (frontend), Render (backend, Postgres, Key Value) |
@@ -112,8 +108,6 @@ docker compose up --build
 | Health | http://localhost:4000/api/health |
 
 When the backend container starts, it runs `prisma migrate deploy` and then the seed script. The seed is idempotent, and you can turn it off with `RUN_SEED=false`. Log in with one of the [test credentials](#test-credentials).
-
-To turn on real AI suggestions, set `AI_API_KEY` (and optionally `AI_PROVIDER`/`AI_MODEL`) in your shell or in a root `.env` file before running compose.
 
 If a host port is already taken (for example by a Postgres installed directly on Windows/macOS), override it. Compose also reads these from a root `.env` file:
 
@@ -185,7 +179,6 @@ With pnpm, every `npm run <script>` above is `pnpm <script>` (e.g. `pnpm start:d
 | backend | `npm run build` | Compile to `dist/` |
 | backend | `npx prisma migrate dev --name <change>` | Create a new migration after editing `schema.prisma` |
 | backend | `npx prisma studio` | Browse the database in a web UI |
-| backend | `npm run eval` | AI classification accuracy report |
 | frontend | `npm run lint` / `npm run typecheck` / `npm run build` | Static checks and production build |
 
 ## Environment variables
@@ -202,13 +195,7 @@ With pnpm, every `npm run <script>` above is `pnpm <script>` (e.g. `pnpm start:d
 | `PORT` | `4000` | HTTP port |
 | `TRUST_PROXY` | `1` | Number of proxy hops to trust for client IPs (rate limiting) |
 | `SLA_CHECK_INTERVAL_MS` | `300000` | How often the SLA sweep runs |
-| `AI_PROVIDER` | `none` | `anthropic`, `openai` or `none` |
-| `AI_API_KEY` | empty | Provider API key. If empty, AI suggestions always use the fallback |
-| `AI_MODEL` | `claude-opus-5-5` (anthropic), `gpt-4o-mini` (openai) | Model ID |
-| `AI_TIMEOUT_MS` | `15000` | Hard timeout for the AI call |
 | `RUN_SEED` | none | Docker only: `true` seeds on container start |
-
-The `AI_*` variables are optional and are left out of `.env.example`. Without them, AI suggestions return safe defaults. Add them to `backend/.env` only to turn on real AI suggestions.
 
 The environment is validated with zod at startup. A missing or invalid value stops the app with a clear message.
 
@@ -286,7 +273,6 @@ All routes are under `/api`. Interactive docs are at **`/api/docs`** (Swagger, w
 | POST | `/users` | ADMIN | Create a user with any role |
 | PATCH | `/users/:id` | ADMIN | `{ name?, role?, isActive? }`. Admins can't deactivate or demote themselves |
 | GET | `/reports` | ADMIN | See below |
-| POST | `/ai/suggest` | any | `{ title, description }` → `{ category, priority, summary, source }`. Rate limit: 10/min |
 | GET | `/health` | public | Checks the database connection |
 
 `GET /reports` returns:
@@ -347,53 +333,10 @@ The API returns invalid transitions as **HTTP 400** with the message above. Stat
 - **HTTP hardening:**
   - `helmet` on the API.
   - CORS limited to `FRONTEND_URL`.
-  - Rate limits: 120 requests/min by default, and 10/min on `/auth/*` and `/ai/suggest`.
+  - Rate limits: 120 requests/min by default, and 10/min on `/auth/*`.
   - Security headers on the frontend (`X-Frame-Options`, `nosniff`, `Referrer-Policy`).
 - **Token storage:** the JWT lives in an **httpOnly, SameSite=Lax cookie** (Secure in production) on the frontend's own domain, so page scripts can't read it, which limits the damage from XSS. Because the BFF talks to the API server-to-server, there are no cross-site cookie problems between Vercel and Render. Requests that change data through the BFF must also come from the same origin.
 - **Secrets:** no secrets in the code. Every app has a `.env.example`, and `.env` files are git-ignored. Render generates `JWT_SECRET`.
-
-## AI feature and evaluation
-
-### How it works
-
-`POST /ai/suggest` takes `{ title, description }` and returns `{ category, priority, summary, source }`.
-
-1. The provider is chosen by `AI_PROVIDER`:
-   - **anthropic**: the official SDK's `messages.parse` with a zod-based structured output format, `effort: low`, and the default model `claude-opus-5-5`.
-   - **openai**: Chat Completions with `response_format: json_schema` and `strict: true`.
-2. Structured output is required. Category must be one of **Billing, Technical, Account, Feature Request, General**, and priority one of **LOW, MEDIUM, HIGH**.
-3. The result is **validated again** with zod. The enums must match and the summary must be 1–300 characters.
-4. **Fallback:** if there is no key, the call times out (`AI_TIMEOUT_MS`), the provider returns an HTTP error, the model refuses, or the output is invalid, the endpoint still returns **200** with `General / MEDIUM / <shortened description>` and `source: "fallback"`. The suggestion is a separate call from ticket creation, so a failed suggestion never blocks creating a ticket.
-5. The ticket text is sent inside delimiters, and the system prompt tells the model to treat it as data, not instructions.
-
-**In the UI:** the "✨ Suggest with AI" button on the create-ticket form fills category, priority and summary. Every field can still be edited before submitting. A note says AI suggestions can be wrong, and a warning appears when the fallback was used.
-
-### Evaluation
-
-- `backend/eval/sample-tickets.json` has **28 realistic, labeled tickets**. Every category is covered, and some tickets are deliberately borderline: a billing ticket whose symptom is technical, a "data retention" question with a deadline, and an iOS crash with a web workaround.
-- `npm run eval` sends each ticket through the same `AiService` the API uses, with the same prompt, validation and fallback. It prints a per-ticket table and **category and priority accuracy separately**, and saves the details to `eval/results.json`.
-
-```bash
-cd backend
-AI_PROVIDER=anthropic AI_API_KEY=sk-ant-... npm run eval
-# or: AI_PROVIDER=openai AI_API_KEY=sk-... AI_MODEL=gpt-4o-mini npm run eval
-```
-
-### Results
-
-No LLM API key was available when this was built, so the real model **has not been evaluated yet**. The script was run without a key to check that it works end to end. That run measures the **fallback baseline** (always `General / MEDIUM`), which is the floor any model needs to beat:
-
-| Run | Category accuracy | Priority accuracy | Both correct | Fallbacks |
-| --- | --- | --- | --- | --- |
-| Fallback baseline (no key) | 4/28 = **14.3%** | 9/28 = **32.1%** | 1/28 = 3.6% | 28/28 |
-| `claude-opus-5-5` | _run `npm run eval` with a key and fill in_ | | | |
-
-### Limitations
-
-- **The AI can misclassify.** Tickets often span categories (a failed card payment is both Billing and Technical), and priority is subjective. The labels in the sample set are one person's judgment, so 100% is neither expected nor meaningful.
-- 28 examples is a small sample: one ticket changes accuracy by about 3.6 points. Use it to catch regressions, not to produce precise numbers.
-- The model never sees ticket history or customer tier, so it can't tell, for example, that a VIP customer's LOW issue is actually urgent.
-- This is why suggestions are **advisory only**: the customer reviews and edits them, the agent sees the final values, and admins can reassign.
 
 ## Tests
 
@@ -411,7 +354,6 @@ There are 91 tests in 7 suites. They are unit tests, so they need no database or
 | `common/guards/roles.guard.spec.ts` | Allow and deny for each role combination, and missing user |
 | `tickets/ticket-access.policy.spec.ts` | Customer, agent and admin visibility, and who may change status |
 | `tickets/tickets.service.spec.ts` | Ownership 404s, an invalid transition returns 400 with the message, `resolvedAt` is set, SLA is applied on create |
-| `ai/ai.service.spec.ts` | Valid output passes; bad enums, empty summary, provider errors and timeouts all fall back |
 
 ## Deployment
 
@@ -424,7 +366,6 @@ There are 91 tests in 7 suites. They are unit tests, so they need no database or
    - `support-ticket-redis` (Key Value, `noeviction`)
 3. Fill in the variables marked `sync: false`:
    - `FRONTEND_URL`: your Vercel URL, e.g. `https://support-desk.vercel.app`
-   - `AI_API_KEY`: optional
 4. On every start the container runs **`prisma migrate deploy`** and then starts the API (see `backend/docker-entrypoint.sh`). `RUN_SEED=true` adds the demo accounts; set it to `false` for real use.
 
 ### Frontend on Vercel
@@ -457,13 +398,12 @@ The seed also creates 10 tickets across every status, priority and category. Two
 - **Schema additions:**
   - `User.isActive`: needed for "deactivate user"; deactivated users can't log in and their tokens stop working.
   - `Ticket.resolvedAt`: needed for average resolution time.
-  - `Ticket.summary`: stores the (edited) AI summary.
+  - `Ticket.summary`: an optional 1–2 line summary the customer can add for the agent.
 - **Who can do what:**
   - Only CUSTOMERs create tickets.
   - Admins can also change status and comment on any ticket ("admins manage everything").
   - Customers can comment on their own tickets in any status.
 - **404 instead of 403** for tickets you're not allowed to see, so the API doesn't reveal that they exist. A customer or unassigned agent trying an admin action still gets **403** from the role guard.
-- **AI runs synchronously** with a hard timeout instead of as a queue job. The user is waiting on the form, and the fallback means it can never block.
 - **The SLA flag stays set** after resolution as a record of the breach. The `isOverdue` in API responses and badges only counts active tickets.
 - **`bcryptjs` instead of native `bcrypt`:** same algorithm and hash format, with no native build step in Alpine images.
 - **The worker runs inside the API process.** That is the simplest setup on Render's free tier. To scale out, run the same image with only the queue module.
@@ -475,5 +415,4 @@ The seed also creates 10 tickets across every status, priority and category. Two
 - Full-text search and sorting on the ticket lists.
 - End-to-end tests (Playwright) and API integration tests against a test database in CI.
 - Audit log of status and assignment changes.
-- A bigger, multi-annotator eval set, with confusion matrices and per-category precision and recall.
 - Split the BullMQ worker into its own Render background worker service.
