@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { humanize } from '@/lib/format';
-import { CATEGORIES, PRIORITIES, type AiSuggestion, type Category, type Priority, type Ticket } from '@/lib/types';
+import { CATEGORIES, PRIORITIES, type Category, type Priority, type Ticket } from '@/lib/types';
 import { Alert, Button, Card, Field, Input, Select, Textarea } from './ui';
 
 interface FormState {
@@ -39,34 +39,10 @@ export function CreateTicketForm() {
   const [errors, setErrors] = useState<Errors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [suggesting, setSuggesting] = useState(false);
-  const [suggestion, setSuggestion] = useState<AiSuggestion | null>(null);
-  const [suggestError, setSuggestError] = useState<string | null>(null);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
-  }
-
-  const canSuggest = form.title.trim().length >= 3 && form.description.trim().length >= 10;
-
-  async function suggest() {
-    setSuggesting(true);
-    setSuggestError(null);
-    try {
-      const result = await api.post<AiSuggestion>('/ai/suggest', {
-        title: form.title.trim(),
-        description: form.description.trim(),
-      });
-      setSuggestion(result);
-      // Fill the fields; the user can still change every one of them before submitting.
-      setForm((prev) => ({ ...prev, category: result.category, priority: result.priority, summary: result.summary }));
-      setErrors((prev) => ({ ...prev, category: undefined, priority: undefined, summary: undefined }));
-    } catch (err) {
-      setSuggestError(errorMessage(err));
-    } finally {
-      setSuggesting(false);
-    }
   }
 
   async function submit(event: FormEvent) {
@@ -116,42 +92,6 @@ export function CreateTicketForm() {
             onChange={(e) => set('description', e.target.value)}
           />
         </Field>
-
-        <div className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/50 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-900">Not sure how to categorise it?</p>
-              <p className="text-xs text-slate-500">
-                AI can suggest a category, priority and summary. Suggestions can be wrong — review and edit them before
-                submitting.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={suggest}
-              loading={suggesting}
-              disabled={!canSuggest}
-              title={canSuggest ? undefined : 'Write a title and description first'}
-              className="shrink-0 whitespace-nowrap"
-            >
-              ✨ Suggest with AI
-            </Button>
-          </div>
-          {suggestion?.source === 'ai' && (
-            <p className="mt-3 text-xs text-indigo-700">Suggestion applied below. You can change any field.</p>
-          )}
-          {suggestion?.source === 'fallback' && (
-            <div className="mt-3">
-              <Alert tone="warning">The AI service is unavailable right now, so default values were filled in. Please adjust them.</Alert>
-            </div>
-          )}
-          {suggestError && (
-            <div className="mt-3">
-              <Alert>{suggestError}</Alert>
-            </div>
-          )}
-        </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Category" htmlFor="category" error={errors.category}>

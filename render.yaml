@@ -35,14 +35,6 @@ services:
       # Set to your Vercel URL, e.g. https://support-desk.vercel.app (comma-separate several).
       - key: FRONTEND_URL
         sync: false
-      - key: AI_PROVIDER
-        value: anthropic
-      - key: AI_API_KEY
-        sync: false
-      - key: AI_MODEL
-        value: claude-opus-5-5
-      - key: AI_TIMEOUT_MS
-        value: 15000
       # "true" seeds demo users/tickets on each start (idempotent). Turn off for real data.
       - key: RUN_SEED
         value: "true"
