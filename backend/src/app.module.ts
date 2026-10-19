@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { CommentsModule } from './comments/comments.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -19,7 +18,7 @@ import { UsersModule } from './users/users.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
-    // Default: 120 requests/minute per user (or IP). Auth and AI routes override with stricter limits.
+    // Default: 120 requests/minute per user (or IP). Auth routes override with stricter limits.
     ThrottlerModule.forRoot({
       throttlers: [{ name: 'default', ttl: 60_000, limit: 120 }],
       errorMessage: 'Too many requests, please try again later',
@@ -29,7 +28,6 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     TicketsModule,
     CommentsModule,
-    AiModule,
     ReportsModule,
   ],
   controllers: [HealthController],

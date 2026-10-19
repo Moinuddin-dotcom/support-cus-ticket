@@ -11,5 +11,4 @@ coverage/
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
-backend/eval/results.json
 CLAUDE.md

@@ -48,7 +48,7 @@ model Ticket {
   id           String       @id @default(uuid())
   title        String
   description  String
-  // Added beyond the base spec: the (user-editable) 1-2 line AI summary.
+  // Added beyond the base spec: an optional 1-2 line summary written by the customer.
   summary      String?
   status       TicketStatus @default(OPEN)
   priority     Priority     @default(MEDIUM)
