@@ -208,6 +208,8 @@ With pnpm, every `npm run <script>` above is `pnpm <script>` (e.g. `pnpm start:d
 | `AI_TIMEOUT_MS` | `15000` | Hard timeout for the AI call |
 | `RUN_SEED` | none | Docker only: `true` seeds on container start |
 
+The `AI_*` variables are optional and are left out of `.env.example`. Without them, AI suggestions return safe defaults. Add them to `backend/.env` only to turn on real AI suggestions.
+
 The environment is validated with zod at startup. A missing or invalid value stops the app with a clear message.
 
 ### Frontend (`frontend/.env.example`)
